@@ -31,6 +31,9 @@ fetch: $(venv)
 	$(python) get_favs.py
 	echo count | gdbmtool favs.db
 
+fetchv2: $(venv)
+	$(python) get_liked_tweets.py $(ARGS)
+
 ## list database
 dump-db:
 	echo list | gdbmtool favs.db

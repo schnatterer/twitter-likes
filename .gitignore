@@ -5,3 +5,4 @@ downloaded
 *.iml
 .idea/
 __pycache__/
+/likes.ndjson

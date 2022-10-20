@@ -22,6 +22,7 @@ access_token_secret = "..."
 ## commands
 
 `make fetch` downloads favs to favs.db and favs.ndjson  
+`TWITTER_LIKES_BEARER_TOKEN='A...' make fetchv2 <username>` downloads likes to favs.ndjson  
 `make dump` extract favs from favs.db to stdout  
 `make` to show all options
 
