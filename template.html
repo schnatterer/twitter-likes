@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <script async src="https://unpkg.com/twitter-status@latest/dist/twitter-status.min.js"></script>
+    <style>
+        body {
+            background-color: #fff;
+        }
+    
+        .container {
+            margin: 0 auto;
+            max-width: 640px;
+        }
+    
+        twitter-status {
+            padding: 0 0 0 0;
+            margin: 8px 0;
+        }
+        twitter-status.card {
+            box-shadow: 0 3px 4px 1px rgba(0, 0, 0, .08), 0 1px 1px 1px rgba(0, 0, 0, .05);
+            border-radius: 2px;
+            border-width: 0;
+        }
+        #content {
+            padding: 0px 0px 0px 0px !important;
+        }
+    </style>
+<body>
+    <h1> {{title}} </h1>
+    <!-- example: https://codepen.io/abraham/pen/eyLLWy -->
+    <div class="container">
+        {% for value in tweets %}
+        <twitter-status class="card" status='{"created_at":"{{value['created_at']}}","id_str":"{{value['id']}}","full_text":"{{value['text']}}","user": {"id": {{value['author']['id']}},"name": "{{value['author']['name']}}","screen_name": "{{value['author']['username']}}"}}'></twitter-status>
+        {% endfor %}
+        <!--,"id_str": "12",-->
+    </div>
+        
+
+</body>
+</html>
