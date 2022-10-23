@@ -2,7 +2,18 @@
 
 Download your twitter likes using an enhanced version of https://gist.github.com/datagrok/74a71f572493e603919e
 
-## prereqs
+## Run inside container
+
+```shell
+  TOKEN='A...' # The two spaces avoid storing the secret in shell history
+docker run --rm --pull=always -u=$(id -u) \
+  -v $(pwd):/cwd -e TWITTER_LIKES_BEARER_TOKEN=$TOKEN \
+  ghcr.io/schnatterer/twitter-likes \
+  /scripts/get_liked_tweets.py <username>
+```
+
+## Run locally
+### prereqs
 
 - Install python 3
 - Install gdbm: `brew install gdbm`
@@ -19,7 +30,7 @@ access_token_secret = "..."
 
 - `make venv` to create the virtual env
 
-## commands
+### commands
 
 `make fetch` downloads favs to favs.db and favs.ndjson  
 `TWITTER_LIKES_BEARER_TOKEN='A...' make fetchv2 <username>` downloads likes to favs.ndjson  

@@ -1,0 +1,5 @@
+# Ignore all
+*
+# Allowlist
+!*.py
+!requirements.txt

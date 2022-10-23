@@ -33,6 +33,7 @@ def main(parsed_args):
               f'{response.meta["next_token"] if "next_token" in response.meta else ""}\n#')
 
         # response.data might be None on last page
+        # TODO integrate author in tweets? Redundant but takes a snapshot of author at the time of storage
         for tweet in response.data or []:
             data.append(tweet.data)
 
