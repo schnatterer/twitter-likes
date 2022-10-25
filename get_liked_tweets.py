@@ -8,13 +8,18 @@ import argparse
 
 
 def main(parsed_args):
-
     data = []
     includes = {}
-    count = 0
+    tweets_by_id = {}
+    # Initialize with some field so we can use the reference users_by_id and included_tweets_by_id
+    includes_by_id = {'users': {}, 'tweets': {}}
+
+    request_count = 0
+    new_tweets_count = 0
+    new_includes_count = {}
     pagination_token = None
 
-    username = args.username
+    username = parsed_args.username
     bearer_token = os.environ.get('TWITTER_LIKES_BEARER_TOKEN')
     if not bearer_token:
         sys.stderr.write('Please set env var TWITTER_LIKES_BEARER_TOKEN')
@@ -25,27 +30,140 @@ def main(parsed_args):
     if json_from_file:
         data = json_from_file['data']
         includes = json_from_file['includes']
-        print(f'Read {len(data)} tweets from {json_file_name}')
+        initialize_includes(includes, includes_by_id)
+        initialize_tweets(data, tweets_by_id)
+        print(f'Read {len(data)} tweets + includes: {countIncludes(includes)} from {json_file_name}')
 
     for response in get_liked_tweets(bearer_token, username, pagination_token):
-        count = count + 1
-        print(f'#\n# REQUEST #{count}. Next Page token: '
+        request_count += 1
+        print(f'#\n# REQUEST #{request_count}. Next Page token: '
               f'{response.meta["next_token"] if "next_token" in response.meta else ""}\n#')
 
-        # response.data might be None on last page
-        # TODO integrate author in tweets? Redundant but takes a snapshot of author at the time of storage
-        for tweet in response.data or []:
-            data.append(tweet.data)
+        # Start with includes, so includes_by_id is ready to be used in tweets-loop
+        process_includes(response, includes, includes_by_id, new_includes_count)
 
-        for key, value in response.includes.items():
-            # e.g. 'users' -> list of users
-            if not (key in includes):
-                includes[key] = []
-            for includeObject in value:
-                includes[key].append(includeObject.data)
+        new_tweets_count += process_tweets(response, data, tweets_by_id, includes_by_id)
 
     write_json(json_file_name, data, includes)
-    print(f'Done writing {len(data)} tweets')
+    print(f'Done writing {len(data)} tweets ({new_tweets_count} new) + includes: {countIncludes(includes)}'
+          f' (new {new_includes_count}) to {json_file_name}')
+
+
+def process_tweets(response, data, tweets_by_id, includes_by_id):
+    new_tweets_count = 0
+    users_by_id = includes_by_id['users']
+    included_tweets_by_id = includes_by_id['tweets']
+
+    # response.data might be None on last page
+    for tweet in response.data or []:
+        # Avoid duplicate tweets, keep original
+        if not str(tweet.id) in tweets_by_id:
+            user = users_by_id[str(tweet['author_id'])]
+            append_user_to_tweet_data(tweet.data, user)
+            add_referenced_tweet_data_from_includes(tweet, included_tweets_by_id, users_by_id)
+
+            tweets_by_id[tweet.id] = tweet.data
+            data.append(tweet.data)
+            tweet.data["saved_at"] = datetime.datetime.now()
+            new_tweets_count += 1
+            print(f'  Tweet added: {tweet.id}')
+        else:
+            # TODO update data but keep user?
+            print(f'  Tweet already exists: {tweet.id}')
+
+    return new_tweets_count
+
+
+def process_includes(response, includes, includes_by_id, new_includes_count):
+
+    # e.g. 'users' -> list of users
+    for key, value in response.includes.items():
+        if not (key in includes):
+            includes[key] = []
+        if not (key in includes_by_id):
+            includes_by_id[key] = {}
+
+        # e.g. individual user objects
+        for include_object in value:
+            # Update includes in order to avoid duplicate
+            include_object_id = find_id(include_object.data)
+            if include_object_id in includes_by_id[key]:
+                print(f'  Included {key} updated: {include_object_id}')
+                includes_by_id[key][include_object_id].update(include_object.data)
+                includes[key][findIndexById(includes[key], include_object_id)] = include_object.data
+            else:
+                includes[key].append(include_object.data)
+                includes_by_id[key][include_object_id] = include_object.data
+                increment(new_includes_count, key)
+                print(f'  Included {key} added: {include_object_id}')
+
+
+def findIndexById(target_list, target_id):
+    for index, element in enumerate(target_list):
+        if 'id' in element:
+            if element['id'] == target_id:
+                return index
+        elif 'media_key' in element:
+            if element['media_key'] == target_id:
+                return index
+        else:
+            print(f'Missing ID field in object: {element}')
+            exit(2)
+    return -1
+
+
+def increment(new_includes, key):
+    if key not in new_includes:
+        new_includes[key] = 0
+    new_includes[key] += 1
+
+
+def countIncludes(includes):
+    len_by_include = {}
+    for key, value in includes.items():
+        len_by_include[key] = len(value)
+    return len_by_include
+
+
+def initialize_includes(includes, includes_by_id):
+    # e.g. 'users' -> list of users
+    for key, value in includes.items():
+        if not (key in includes_by_id):
+            includes_by_id[key] = {}
+        for include_object in value:
+            include_object_id = find_id(include_object)
+            includes_by_id[key][include_object_id] = include_object
+
+
+def initialize_tweets(tweets, tweets_by_id):
+    for tweet in tweets or []:
+        tweets_by_id[tweet['id']] = tweet
+
+
+def find_id(include):
+    if 'id' in include:
+        return include['id']
+    elif 'media_key' in include:
+        return include['media_key']
+    else:
+        print(f'Missing ID field in object: {include}')
+        exit(2)
+
+
+def add_referenced_tweet_data_from_includes(tweet, tweets_by_id, users_by_id):
+    if 'referenced_tweets' in tweet:
+        for ret_tweet in tweet['referenced_tweets']:
+            if ret_tweet['id'] in tweets_by_id:
+                actual_ref_tweet = tweets_by_id[ret_tweet['id']]
+                ref_tweet_user = users_by_id[actual_ref_tweet['author_id']]
+
+                append_user_to_tweet_data(actual_ref_tweet, ref_tweet_user)
+            # else: # Tweet is likely deleted
+
+
+def append_user_to_tweet_data(tweet, user):
+    tweet["author"] = user
+    tweet["author"]["saved_at"] = datetime.datetime.now()
 
 
 def write_json(json_file_name, data, includes):
