@@ -12,6 +12,8 @@ docker run --rm --pull=always -u=$(id -u) \
   /scripts/get_liked_tweets.py <username>
 ```
 
+TODO template
+
 ## Run locally
 ### prereqs
 
@@ -32,10 +34,15 @@ access_token_secret = "..."
 
 ### commands
 
-`make fetch` downloads favs to favs.db and favs.ndjson  
-`TWITTER_LIKES_BEARER_TOKEN='A...' make fetchv2 <username>` downloads likes to favs.ndjson  
-`make dump` extract favs from favs.db to stdout  
-`make` to show all options
+* `make fetch` downloads favs to favs.db and favs.ndjson  
+* `TWITTER_LIKES_BEARER_TOKEN='A...' make fetchv2 <username>` downloads likes to `favs.ndjson`  
+  * Downloads in [Twitter v2 API](https://developer.twitter.com/en/docs/twitter-api/tweets/likes/api-reference/get-users-id-liked_tweets) format.
+  * In addition, for easier processing, embeds 
+    * full tweet in `referenced_tweets` and
+    * full `author` object in all tweets and `referenced_tweets` in `data` (not `includes`)
+  * Can be run incrementally. Keeps authors in `data` only updates other data, and `includes`
+* `make dump` extract favs from favs.db to stdout  
+* `make` to show all options
 
 ## alternatives
 

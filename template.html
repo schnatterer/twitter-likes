@@ -22,18 +22,16 @@
             border-radius: 2px;
             border-width: 0;
         }
-        #content {
-            padding: 0px 0px 0px 0px !important;
-        }
     </style>
 <body>
     <h1> {{title}} </h1>
     <!-- example: https://codepen.io/abraham/pen/eyLLWy -->
+    <!-- TODO Some stats: n tweets by m users -->
     <div class="container">
-        {% for value in tweets %}
-        <twitter-status class="card" status='{"created_at":"{{value['created_at']}}","id_str":"{{value['id']}}","full_text":"{{value['text']}}","user": {"id": {{value['author']['id']}},"name": "{{value['author']['name']}}","screen_name": "{{value['author']['username']}}"}}'></twitter-status>
-        {% endfor %}
-        <!--,"id_str": "12",-->
+        <!-- https://stackoverflow.com/questions/18662898/jinja-render-text-in-html-preserving-line-breaks ??? -->
+        {% for value in tweets %}{% autoescape true %} <!-- escaped quote  &#34; causes exceptikns?! -> getting rid of web comp --> 
+        <twitter-status class="card" status='{"created_at":"{{value['created_at']}}","id_str":"{{value['id']}}","full_text":"{{value['text'].replace('\n', '<br>')}}","user": {"id": {{value['author']['id']}},"name": "{{value['author']['name']}}","screen_name": "{{value['author']['username']}}", "profile_image_url_https": "{{value['author']['profile_image_url']}}"}}'></twitter-status>
+        {% endautoescape %}{% endfor %}
     </div>
         
 

@@ -8,6 +8,7 @@ import argparse
 
 
 def main(parsed_args):
+    # TODO fetch tweets also?
     data = []
     includes = {}
     tweets_by_id = {}
@@ -43,7 +44,7 @@ def main(parsed_args):
         process_includes(response, includes, includes_by_id, new_includes_count)
 
         new_tweets_count += process_tweets(response, data, tweets_by_id, includes_by_id)
-
+        break
     write_json(json_file_name, data, includes)
     print(f'Done writing {len(data)} tweets ({new_tweets_count} new) + includes: {countIncludes(includes)}'
           f' (new {new_includes_count}) to {json_file_name}')
@@ -57,19 +58,30 @@ def process_tweets(response, data, tweets_by_id, includes_by_id):
     # response.data might be None on last page
     for tweet in response.data or []:
         # Avoid duplicate tweets, keep original
-        if not str(tweet.id) in tweets_by_id:
+        tweet_id = str(tweet.id)
+        if not tweet_id in tweets_by_id:
+            print(f'  Tweet added: {tweet_id}')
             user = users_by_id[str(tweet['author_id'])]
-            append_user_to_tweet_data(tweet.data, user)
-            add_referenced_tweet_data_from_includes(tweet, included_tweets_by_id, users_by_id)
 
-            tweets_by_id[tweet.id] = tweet.data
-            data.append(tweet.data)
             tweet.data["saved_at"] = datetime.datetime.now()
+            append_user_to_tweet_data(tweet.data, user)
+            add_referenced_tweet_data_from_includes(tweet.data, included_tweets_by_id, users_by_id)
+
+            # Sort by key to get deterministic result
+            sorted_data = dict(sorted(tweet.data.items()))
+
+            tweets_by_id[tweet_id] = sorted_data
+            data.append(sorted_data)
             new_tweets_count += 1
-            print(f'  Tweet added: {tweet.id}')
         else:
-            # TODO update data but keep user?
-            print(f'  Tweet already exists: {tweet.id}')
+            print(f'  Tweet updated: {tweet.id}')
+            # Update data but keep user
+            existing_tweet = data[findIndexById(data, tweet_id)]
+            # TODO overwrites referenced tweets :(
+            existing_tweet |= dict(sorted(tweet.data.items()))
+            existing_tweet["saved_at"] = datetime.datetime.now()
+            tweets_by_id[tweet.id] = existing_tweet
+            add_referenced_tweet_data_from_includes(existing_tweet, included_tweets_by_id, users_by_id, False)
 
     return new_tweets_count
 
@@ -87,13 +99,15 @@ def process_includes(response, includes, includes_by_id, new_includes_count):
         for include_object in value:
             # Update includes in order to avoid duplicate
             include_object_id = find_id(include_object.data)
+            # Sort by key to get deterministic result
+            sorted_data = dict(sorted(include_object.data.items()))
             if include_object_id in includes_by_id[key]:
                 print(f'  Included {key} updated: {include_object_id}')
-                includes_by_id[key][include_object_id].update(include_object.data)
-                includes[key][findIndexById(includes[key], include_object_id)] = include_object.data
+                includes_by_id[key][include_object_id].update(sorted_data)
+                includes[key][findIndexById(includes[key], include_object_id)] = sorted_data
             else:
-                includes[key].append(include_object.data)
-                includes_by_id[key][include_object_id] = include_object.data
+                includes[key].append(sorted_data)
+                includes_by_id[key][include_object_id] = sorted_data
                 increment(new_includes_count, key)
                 print(f'  Included {key} added: {include_object_id}')
 
@@ -109,7 +123,9 @@ def findIndexById(target_list, target_id):
         else:
             print(f'Missing ID field in object: {element}')
             exit(2)
-    return -1
+    print(f'Unable to find ID {target_id} in list {target_list}')
+    # returning -1 will result in being written to index -1 -> chaos
+    exit(2)
 
 
 def increment(new_includes, key):
@@ -150,14 +166,17 @@ def find_id(include):
         exit(2)
 
 
-def add_referenced_tweet_data_from_includes(tweet, tweets_by_id, users_by_id):
+def add_referenced_tweet_data_from_includes(tweet, included_tweets_by_id, users_by_id, appendUser = True):
     if 'referenced_tweets' in tweet:
-        for ret_tweet in tweet['referenced_tweets']:
-            if ret_tweet['id'] in tweets_by_id:
-                actual_ref_tweet = tweets_by_id[ret_tweet['id']]
+        for ref_tweet in tweet['referenced_tweets']:
+            if ref_tweet['id'] in included_tweets_by_id:
+                actual_ref_tweet = included_tweets_by_id[ref_tweet['id']]
                 ref_tweet_user = users_by_id[actual_ref_tweet['author_id']]
 
-                append_user_to_tweet_data(actual_ref_tweet, ref_tweet_user)
+                ref_tweet["saved_at"] = datetime.datetime.now()
+                ref_tweet |= actual_ref_tweet
+                if appendUser:
+                    append_user_to_tweet_data(ref_tweet, ref_tweet_user)
             # else: # Tweet is likely deleted
 
 
